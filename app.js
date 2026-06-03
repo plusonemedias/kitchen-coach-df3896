@@ -31,9 +31,12 @@ function fmtTime(hm) {
   return `${h12}:${String(m).padStart(2,'0')} ${ap}`;
 }
 function dayTypeFor(d = new Date()) { return CFG.dayTypes[d.getDay()]; }
-// which template tags belong to today
-function todayTags() { const dt = dayTypeFor(); if (dt.soccer) return ['soccer','training','any']; if (dt.training) return ['training','any']; return ['rest','any']; }
-function todayMeals() { const tags = todayTags(); return CFG.library.filter(it => tags.includes(it.day)).sort((a,b)=>(a.time||'').localeCompare(b.time||'')); }
+// which template tags belong to a given day type
+function tagsForDayType(dt) { if (dt.soccer) return ['soccer','training','any']; if (dt.training) return ['training','any']; return ['rest','any']; }
+function todayTags() { return tagsForDayType(dayTypeFor()); }
+function mealsForDayType(dt) { const tags = tagsForDayType(dt); return CFG.library.filter(it => tags.includes(it.day)).sort((a,b)=>(a.time||'').localeCompare(b.time||'')); }
+function todayMeals() { return mealsForDayType(dayTypeFor()); }
+function snackItems() { return CFG.library.filter(it => it.day === 'grab'); }
 
 /* ---------------- data accessors ---------------- */
 const logsFor = (dk = todayKey()) => load('logs', {})[dk] || [];
@@ -111,19 +114,22 @@ function render() {
     <nav class="tabbar">
       ${tabBtn('today','Today','◎')}
       ${tabBtn('log','Log','✦')}
+      ${tabBtn('menu','Menu','▤')}
       ${tabBtn('weigh','Weigh','♛')}
       ${tabBtn('coach','Coach','✉')}
       ${tabBtn('kitchen','Kitchen','⚜')}
     </nav>`;
   renderView();
 }
+const TAB_ORDER = ['today','log','menu','weigh','coach','kitchen'];
 function tabBtn(id, label, icon) { return `<button class="${activeTab===id?'active':''}" onclick="go('${id}')"><span class="ti">${icon}</span>${label}</button>`; }
-function go(tab) { activeTab = tab; renderView(); document.querySelectorAll('.tabbar button').forEach((b,i)=>b.classList.toggle('active',['today','log','weigh','coach','kitchen'][i]===tab)); }
+function go(tab) { activeTab = tab; renderView(); document.querySelectorAll('.tabbar button').forEach((b,i)=>b.classList.toggle('active',TAB_ORDER[i]===tab)); }
 
 function renderView() {
   const v = document.getElementById('view'); if (!v) return;
   if (activeTab === 'today') v.innerHTML = viewToday();
   else if (activeTab === 'log') v.innerHTML = viewLog();
+  else if (activeTab === 'menu') v.innerHTML = viewMenu();
   else if (activeTab === 'weigh') v.innerHTML = viewWeigh();
   else if (activeTab === 'coach') { v.innerHTML = viewCoach(); mountChat(); }
   else if (activeTab === 'kitchen') v.innerHTML = viewKitchen();
@@ -375,6 +381,55 @@ function weightChart(weights) {
     <text x="${pad}" y="${H-8}">${esc(weights[0].date.slice(5))}</text>
     <text x="${W-10}" y="${H-8}" text-anchor="end">${esc(weights[weights.length-1].date.slice(5))}</text>
   </svg>`;
+}
+
+/* ============================================================================
+ * MENU — full weekly meal menu (every meal at its time) + all snacks
+ * ==========================================================================*/
+const DAY_ABBR = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+function viewMenu() {
+  // group weekdays that share the same plan so identical days collapse
+  const order = [1,2,3,4,5,6,0]; // Mon → Sun
+  const groups = []; const seen = {};
+  order.forEach(i => {
+    const dt = CFG.dayTypes[i];
+    const meals = mealsForDayType(dt);
+    const sig = `${dt.kcal}/${dt.protein}|${meals.map(m=>m.name).join(',')}`;
+    if (seen[sig] == null) { seen[sig] = groups.length; groups.push({ days:[i], dt, meals }); }
+    else groups[seen[sig]].days.push(i);
+  });
+  const todayIdx = new Date().getDay();
+
+  const groupCard = g => {
+    const daysLabel = g.days.length === 7 ? 'Every day'
+      : g.days.sort((a,b)=>((a+6)%7)-((b+6)%7)).map(i=>DAY_ABBR[i]).join(' · ');
+    const isToday = g.days.includes(todayIdx);
+    let run = 0;
+    const rows = g.meals.map(m => { run += m.kcal; return `
+      <div class="menu-row">
+        <span class="t">${fmtTime(m.time)}</span>
+        <span class="body"><span class="nm">${esc(m.name)}</span>${m.desc?`<span class="ds">${esc(m.desc)}</span>`:''}</span>
+        <span class="mc">${m.p}g<small>${m.kcal}</small></span>
+      </div>`;
+    }).join('');
+    return `<div class="card">
+      <div class="card-title">${esc(daysLabel)}${isToday?' <span class="pill">today</span>':''}</div>
+      <p class="small muted" style="margin-top:-8px">${esc(g.dt.short)} · ${g.dt.kcal.toLocaleString()} kcal · ${g.dt.protein}g protein</p>
+      <div class="menu-list">${rows}</div>
+    </div>`;
+  };
+
+  const snacks = snackItems();
+  const snackCard = `<div class="card">
+    <div class="card-title">Snacks & extras</div>
+    <p class="small muted" style="margin-top:-8px">${CFG.deskNibble ? 'Plate it, count it, log it — one counted snack, not free grazing.' : 'Quick protein add-ons. Plate and log them.'}</p>
+    <table style="margin-top:8px"><thead><tr><th>Item</th><th class="num">P</th><th class="num">kcal</th></tr></thead><tbody>
+      ${snacks.map(s=>`<tr><td>${esc(s.name)}</td><td class="num">${s.p}g</td><td class="num">${s.kcal}</td></tr>`).join('')}
+    </tbody></table>
+  </div>`;
+
+  const est = CFG.estimates ? `<div class="banner estimate"><strong>Estimates.</strong> Portions are ~⅔ of the household plate. Refine off the scale at week 2.</div>` : '';
+  return est + groups.map(groupCard).join('') + snackCard;
 }
 
 /* ============================================================================

@@ -120,6 +120,21 @@ a { color: var(--gold); text-decoration: none; }
 .sched.done .nm { color: var(--muted); }
 .sched.done .mc { color: var(--green); }
 
+/* Weekly menu rows (read-only) */
+.menu-list { display: flex; flex-direction: column; margin-top: 6px; }
+.menu-row { display: grid; grid-template-columns: 48px 1fr auto; align-items: center; gap: 11px; padding: 11px 0; border-bottom: 1px solid var(--line); }
+.menu-row:last-child { border-bottom: none; }
+.menu-row .t { font-size: .72rem; color: var(--muted); font-weight: 400; font-variant-numeric: tabular-nums; }
+.menu-row .body { min-width: 0; overflow: hidden; }
+.menu-row .nm { display: block; font-weight: 400; font-size: .92rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.menu-row .ds { display: block; font-size: .72rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.menu-row .mc { text-align: right; font-size: .8rem; color: var(--gold); font-weight: 500; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.menu-row .mc small { display: block; color: var(--muted); font-weight: 300; }
+
+/* tighten the bar now that there are six tabs */
+.tabbar button { font-size: .62rem; }
+.tabbar .ti { font-size: 1.15rem; }
+
 /* Water */
 .water-bar { height: 12px; border-radius: 8px; background: var(--ring-track); overflow: hidden; }
 .water-fill { height: 100%; background: linear-gradient(90deg, var(--gold-2), var(--gold)); width: 0; transition: width .3s; }
