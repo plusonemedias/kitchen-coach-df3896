@@ -174,11 +174,11 @@ function viewToday() {
   </div>
 
   <div class="card">
-    <div class="card-title">Tap to log</div>
-    <div class="meal-list">
-      ${todayMeals().map(it => mealRow(it)).join('')}
+    <div class="card-title">Today's plan · tap to log</div>
+    <div class="agenda">
+      ${(() => { const logged = new Set(logsFor().map(e => e.name)); return todayMeals().map(it => schedRow(it, logged)).join(''); })()}
     </div>
-    <button class="btn ghost full" style="margin-top:12px;color:var(--muted)" onclick="go('log')">More options · manual add ›</button>
+    <button class="btn ghost full" style="margin-top:14px;color:var(--muted)" onclick="go('log')">＋ Log something else</button>
   </div>
 
   <div class="card tight">
@@ -201,6 +201,17 @@ function mealRow(it) {
     <span class="plus">+</span>
     <span class="body"><span class="nm">${esc(it.name)}</span>${it.desc?`<span class="ds">${esc(it.desc)}</span>`:''}</span>
     <span class="mc">${it.p}g P<small>${it.kcal} kcal</small></span>
+  </button>`;
+}
+// timed agenda row for Today's plan — logged meals check off
+function schedRow(it, logged) {
+  const i = CFG.library.indexOf(it);
+  const done = logged.has(it.name);
+  return `<button class="sched ${done?'done':''}" onclick="quickAdd(${i})">
+    <span class="t">${fmtTime(it.time)}</span>
+    <span class="node">${done?'✓':'＋'}</span>
+    <span class="body"><span class="nm">${esc(it.name)}</span>${it.desc?`<span class="ds">${esc(it.desc)}</span>`:''}</span>
+    <span class="mc">${it.p}g<small>${it.kcal} kcal</small></span>
   </button>`;
 }
 function bumpToday() { document.getElementById('view').innerHTML = viewToday(); }

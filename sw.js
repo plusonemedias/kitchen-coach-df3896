@@ -1,6 +1,6 @@
 /* Kitchen Coach service worker — offline shell cache.
  * App data lives in localStorage (not here). Coach chat needs network. */
-const CACHE = 'kitchen-coach-v4';
+const CACHE = 'kitchen-coach-v5';
 const ASSETS = [
   './', './index.html', './styles.css', './config.js', './app.js',
   './manifest.json', './icons/icon.svg', './icons/icon-maskable.svg',
