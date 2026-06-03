@@ -466,21 +466,13 @@ function viewCoach() {
   const chat = load('chat', []);
   const key = load('apikey', '');
 
-  // No key → setup card + the always-on offline coach (with the Project copy option).
+  // No key → offline coach + one-tap Copy into your free Claude Project (her route).
   if (!key) return `
     <div class="card">
-      <div class="card-title">Chat with Claude in-app</div>
-      <p class="small">Paste a personal Anthropic API key and the Coach tab becomes a real Claude chat that reads your live log — including food-photo verdicts. No copy-paste.</p>
-      <ul class="tidy small">
-        <li><strong>Pay-as-you-go</strong> and separate from any Claude subscription — usually ~$1–3/month for two casual users.</li>
-        <li>Stored <strong>only on this device</strong>, sent <strong>only to api.anthropic.com</strong>.</li>
-        <li>Get one at <span class="muted">console.anthropic.com → API keys</span>.</li>
-      </ul>
-      <label class="field">API key (sk-ant-…)</label>
-      <input id="key-input" type="password" placeholder="sk-ant-..."/>
-      <button class="btn primary full" style="margin-top:12px" onclick="saveKey()">Turn on the Claude coach</button>
+      <div class="card-title">Your Claude coach</div>
+      <p class="small">Ask below for an instant offline answer — or tap <strong>Copy for Claude</strong> and paste it (with today's log) into your free <strong>Kitchen Coach</strong> Project in the Claude app. One-time setup: <code>CLAUDE-PROJECT-SETUP.md</code>.</p>
     </div>
-    <div class="card" style="display:flex;flex-direction:column;min-height:42vh">
+    <div class="card" style="display:flex;flex-direction:column;min-height:44vh">
       <div class="card-title">Quick coach · offline · instant · free</div>
       <div class="chat-scroll" id="chat-scroll">
         ${chat.length ? chat.map(renderMsg).join('') : `<div class="msg assistant">${mdLite(coachGreeting())}</div>`}
@@ -490,6 +482,14 @@ function viewCoach() {
         <textarea id="chat-text" rows="1" placeholder="Ask the coach…" oninput="autoGrow(this)" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChat()}"></textarea>
         <button class="btn primary" style="flex:none" onclick="sendChat()" aria-label="Send">›</button>
       </div>
+      <button class="btn royal full" style="margin-top:10px" onclick="copyForClaude()">⧉ Copy this for my Claude coach</button>
+    </div>
+    <div class="card tight">
+      <div class="card-title">Or chat in-app</div>
+      <p class="small muted">Paste a personal Anthropic API key (pay-as-you-go, ~$1–3/mo, separate from a Claude subscription) to chat with Claude right here — with food-photo verdicts. Device-only, sent only to api.anthropic.com.</p>
+      <label class="field">API key (sk-ant-…)</label>
+      <input id="key-input" type="password" placeholder="sk-ant-..."/>
+      <button class="btn full" style="margin-top:10px" onclick="saveKey()">Turn on in-app Claude</button>
     </div>`;
 
   // Key set → real Claude chat with photo attach.
@@ -524,6 +524,20 @@ function coachContext() {
   if (CFG.deskNibble) L.push(`Desk-nibbles counted this week: ${nibbleWeek().reduce((a,b)=>a+b,0)}.`);
   if (w.length) L.push(`Recent weigh-ins: ${w.map(x=>`${x.date} ${x.kg}kg`).join(', ')}. Goal ${CFG.goalWeightKg}kg by ${CFG.goalDateLabel}.`);
   return L.join('\n');
+}
+
+/* Snapshot to paste into a Claude Project (data + the user's question). */
+function coachSnapshot(question) {
+  return `# Kitchen Coach check-in — ${CFG.name}\n${coachContext()}\n\nMy question: ${question && question.trim() ? question.trim() : '(type your question)'}`;
+}
+async function copyForClaude() {
+  const text = coachSnapshot(val('chat-text'));
+  try { await navigator.clipboard.writeText(text); toast('Copied — paste into your Claude Project'); }
+  catch {
+    openModal(`<h2>Copy for your Claude coach</h2>
+      <p class="small muted">Tap the box to select all, copy, then paste into your Kitchen Coach Project in the Claude app.</p>
+      <textarea rows="13" readonly onclick="this.select()">${esc(text)}</textarea>`);
+  }
 }
 
 function pickPhoto(ev) {
