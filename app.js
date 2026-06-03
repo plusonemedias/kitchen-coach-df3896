@@ -384,7 +384,7 @@ function viewKitchen() {
 }
 
 /* ============================================================================
- * COACH — fully OFFLINE. Rules + your real logged data. No API, no cost.
+ * COACH — in-app Claude when an API key is set, offline rules coach otherwise.
  * ==========================================================================*/
 const COACH_CHIPS = [
   'What should I eat now?',
@@ -394,63 +394,144 @@ const COACH_CHIPS = [
   'Craving a snack',
   'Batch & grocery',
 ];
+let pendingImage = null; // { dataUrl, mediaType, base64 } for photo verdicts
 
 function viewCoach() {
   const chat = load('chat', []);
-  return `
+  const key = load('apikey', '');
+
+  // No key → setup card + the always-on offline coach (with the Project copy option).
+  if (!key) return `
     <div class="card">
-      <div class="card-title">Your Claude coach</div>
-      <p class="small">Full-strength Claude on your Pro plan — no extra cost. Type a question below, tap <strong>Copy for Claude</strong>, then paste into your private <strong>Kitchen Coach</strong> Project in the Claude app. Your real log goes with it, so the coach answers off live data.</p>
-      <p class="small muted" style="margin-top:8px">One-time setup (2 min): see <code>CLAUDE-PROJECT-SETUP.md</code>.</p>
+      <div class="card-title">Chat with Claude in-app</div>
+      <p class="small">Paste a personal Anthropic API key and the Coach tab becomes a real Claude chat that reads your live log — including food-photo verdicts. No copy-paste.</p>
+      <ul class="tidy small">
+        <li><strong>Pay-as-you-go</strong> and separate from any Claude subscription — usually ~$1–3/month for two casual users.</li>
+        <li>Stored <strong>only on this device</strong>, sent <strong>only to api.anthropic.com</strong>.</li>
+        <li>Get one at <span class="muted">console.anthropic.com → API keys</span>.</li>
+      </ul>
+      <label class="field">API key (sk-ant-…)</label>
+      <input id="key-input" type="password" placeholder="sk-ant-..."/>
+      <button class="btn primary full" style="margin-top:12px" onclick="saveKey()">Turn on the Claude coach</button>
     </div>
-    <div class="card" style="display:flex;flex-direction:column;min-height:46vh">
-      <div class="card-title">Quick coach · offline · instant</div>
+    <div class="card" style="display:flex;flex-direction:column;min-height:42vh">
+      <div class="card-title">Quick coach · offline · instant · free</div>
       <div class="chat-scroll" id="chat-scroll">
         ${chat.length ? chat.map(renderMsg).join('') : `<div class="msg assistant">${mdLite(coachGreeting())}</div>`}
       </div>
-      <div class="chips" id="chips">${COACH_CHIPS.map(c=>`<button class="chip" onclick="coachAsk(this.textContent)">${esc(c)}</button>`).join('')}</div>
+      <div class="chips">${COACH_CHIPS.map(c=>`<button class="chip" onclick="coachAsk(this.textContent)">${esc(c)}</button>`).join('')}</div>
       <div class="chat-input">
         <textarea id="chat-text" rows="1" placeholder="Ask the coach…" oninput="autoGrow(this)" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChat()}"></textarea>
         <button class="btn primary" style="flex:none" onclick="sendChat()" aria-label="Send">›</button>
       </div>
-      <button class="btn royal full" style="margin-top:10px" onclick="copyForClaude()">⧉ Copy this for my Claude coach (deeper answer)</button>
+    </div>`;
+
+  // Key set → real Claude chat with photo attach.
+  return `
+    <div class="card" style="display:flex;flex-direction:column;min-height:64vh">
+      <div class="card-title">Coach · Claude · reads today's log</div>
+      <div class="chat-scroll" id="chat-scroll">
+        ${chat.length ? chat.map(renderMsg).join('') : `<div class="msg assistant">${mdLite(coachGreeting())}</div>`}
+      </div>
+      <div id="typing" class="typing hide">Coach is thinking…</div>
+      <div class="chips">${COACH_CHIPS.map(c=>`<button class="chip" onclick="coachAsk(this.textContent)">${esc(c)}</button>`).join('')}</div>
+      <div id="attach-row"></div>
+      <div class="chat-input">
+        <label class="icon-btn" title="Attach a food photo" style="flex:none">📷<input id="photo" type="file" accept="image/*" class="sr" onchange="pickPhoto(event)"></label>
+        <textarea id="chat-text" rows="1" placeholder="Ask Claude… or attach a photo" oninput="autoGrow(this)" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChat()}"></textarea>
+        <button class="btn primary" style="flex:none" onclick="sendChat()" aria-label="Send">›</button>
+      </div>
     </div>`;
 }
-/* Build a clean snapshot of the real log to paste into the Claude Project. */
-function coachSnapshot(question) {
+function saveKey() { const k = (val('key-input')||'').trim(); if (k) { save('apikey', k); toast('Claude coach on'); renderView(); } }
+
+/* Live-data context block injected into each Claude message (data only, no question). */
+function coachContext() {
   const s = liveSnapshot();
   const w = load('weights', []).slice(-4);
   const L = [];
-  L.push(`# Kitchen Coach check-in — ${CFG.name}${CFG.estimates ? ' (targets are ESTIMATES — use the labelled ranges, don\'t invent precise numbers)' : ''}`);
-  L.push(`Today (${todayKey()}) — **${s.dt.label}**. Target ${s.dt.kcal.toLocaleString()} kcal / ${s.dt.protein}g protein. Floor ${CFG.calorieFloor}.`);
-  L.push(`Logged so far: ${Math.round(s.t.kcal)} kcal · ${Math.round(s.t.p)}g protein · ${Math.round(s.t.c)}g carbs · ${Math.round(s.t.f)}g fat. Water ${(s.water/1000).toFixed(1)}/3 L.`);
-  L.push(`Remaining: ${s.kLeft.toLocaleString()} kcal · ${s.pLeft}g protein.`);
+  L.push(`Coaching ${CFG.name}${CFG.estimates ? ' (targets are ESTIMATES — use the labelled ranges, never invent precise numbers)' : ' (confirmed numbers)'}.`);
+  L.push(`Today ${todayKey()} — ${s.dt.label}. Target ${s.dt.kcal.toLocaleString()} kcal / ${s.dt.protein}g protein. Floor ${CFG.calorieFloor}.`);
+  L.push(`Logged so far: ${Math.round(s.t.kcal)} kcal, ${Math.round(s.t.p)}g protein, ${Math.round(s.t.c)}g carbs, ${Math.round(s.t.f)}g fat. Water ${(s.water/1000).toFixed(1)}/3 L.`);
+  L.push(`Remaining: ${s.kLeft.toLocaleString()} kcal, ${s.pLeft}g protein.`);
   L.push(s.entries.length ? `Entries today: ${s.entries.map(e=>`${fmtTime(e.time)} ${e.name} (${e.kcal} kcal / ${e.p}g P)`).join('; ')}.` : 'Nothing logged yet today.');
   if (CFG.deskNibble) L.push(`Desk-nibbles counted this week: ${nibbleWeek().reduce((a,b)=>a+b,0)}.`);
   if (w.length) L.push(`Recent weigh-ins: ${w.map(x=>`${x.date} ${x.kg}kg`).join(', ')}. Goal ${CFG.goalWeightKg}kg by ${CFG.goalDateLabel}.`);
-  L.push('');
-  L.push(`My question: ${question && question.trim() ? question.trim() : '(type your question)'}`);
   return L.join('\n');
 }
-async function copyForClaude() {
-  const text = coachSnapshot(val('chat-text'));
-  try { await navigator.clipboard.writeText(text); toast('Copied — paste into your Claude Project'); }
-  catch {
-    openModal(`<h2>Copy for your Claude coach</h2>
-      <p class="small muted">Tap the box to select all, copy, then paste into your Kitchen Coach Project in the Claude app.</p>
-      <textarea rows="13" readonly onclick="this.select()">${esc(text)}</textarea>`);
-  }
+
+function pickPhoto(ev) {
+  const file = ev.target.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    pendingImage = { dataUrl: reader.result, mediaType: file.type, base64: String(reader.result).split(',')[1] };
+    const row = document.getElementById('attach-row');
+    if (row) row.innerHTML = `<div class="attach-chip">📎 Photo attached — ask for a ✅/✏️/❌ verdict <button class="x" onclick="clearPhoto()">✕</button></div>`;
+  };
+  reader.readAsDataURL(file);
 }
+function clearPhoto() { pendingImage = null; const row = document.getElementById('attach-row'); if (row) row.innerHTML = ''; }
+
 function mountChat() { const s = document.getElementById('chat-scroll'); if (s) s.scrollTop = s.scrollHeight; }
 function autoGrow(el) { el.style.height = 'auto'; el.style.height = Math.min(120, el.scrollHeight)+'px'; }
-function renderMsg(m) { return `<div class="msg ${m.role==='user'?'user':'assistant'}">${m.role==='assistant'?mdLite(m.content):esc(m.content)}</div>`; }
+function renderMsg(m) {
+  if (m.error) return `<div class="msg error">${esc(m.content)}</div>`;
+  const img = m.image ? `<img src="${m.image}" alt="attached photo"/>` : '';
+  return `<div class="msg ${m.role==='user'?'user':'assistant'}">${m.role==='assistant'?mdLite(m.content):esc(m.content)}${img}</div>`;
+}
 function coachAsk(text) { const ta = document.getElementById('chat-text'); if (ta) ta.value = text; sendChat(); }
-function sendChat() {
-  const text = (val('chat-text')||'').trim(); if (!text) return;
+
+async function sendChat() {
+  const text = (val('chat-text')||'').trim();
+  if (!text && !pendingImage) return;
+  const key = load('apikey', '');
   const chat = load('chat', []);
-  chat.push({ role:'user', content:text });
-  chat.push({ role:'assistant', content: coachReply(text) });
+  chat.push({ role:'user', content: text || '(photo)', image: pendingImage ? pendingImage.dataUrl : null });
   save('chat', chat);
+
+  // No key → instant offline rules coach.
+  if (!key) { chat.push({ role:'assistant', content: coachReply(text) }); save('chat', chat); renderView(); return; }
+
+  // Key → real Claude call.
+  const imageForApi = pendingImage; pendingImage = null;
+  const ta = document.getElementById('chat-text'); if (ta) ta.value = '';
+  renderView();
+  const typing = document.getElementById('typing'); if (typing) typing.classList.remove('hide');
+
+  const dt = dayTypeFor();
+  const system = [
+    { type: 'text', text: MASTERBRIEF, cache_control: { type: 'ephemeral' } },  // cached → cheap per message
+    { type: 'text', text: `INSTANCE: You are coaching ${CFG.name}. Today is a ${dt.label} day — target ${dt.kcal} kcal / ${dt.protein}g protein, floor ${CFG.calorieFloor}.${CFG.estimates ? ' Her targets are ESTIMATES; never present them as precise.' : ''} Only ever discuss ${CFG.name}'s own data — never the partner's. Keep replies mobile-short: tables for macros, bullets for lists.` },
+  ];
+  const apiMessages = chat.filter(m => !m.error).map((m, i, arr) => {
+    const blocks = [];
+    if (m.role === 'user' && i === arr.length - 1) {
+      blocks.push({ type: 'text', text: `[LIVE DATA — today]\n${coachContext()}\n\n[MESSAGE]\n${m.content}` });
+      if (imageForApi) blocks.push({ type: 'image', source: { type: 'base64', media_type: imageForApi.mediaType, data: imageForApi.base64 } });
+    } else {
+      blocks.push({ type: 'text', text: m.content });
+    }
+    return { role: m.role, content: blocks };
+  });
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-api-key': key,
+        'anthropic-version': ANTHROPIC_VERSION,
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({ model: CLAUDE_MODEL, max_tokens: 1024, system, messages: apiMessages }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error ? data.error.message : `HTTP ${res.status}`);
+    const reply = (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n').trim();
+    const chat2 = load('chat', []); chat2.push({ role: 'assistant', content: reply || '(no response)' }); save('chat', chat2);
+  } catch (err) {
+    const chat2 = load('chat', []); chat2.push({ role: 'assistant', error: true, content: `Couldn't reach Claude: ${err.message}. Check your API key in Settings — the offline quick coach still works.` }); save('chat', chat2);
+  }
   renderView();
 }
 
@@ -576,28 +657,38 @@ function mdLite(src) {
 function inline(s) { return s.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/`(.+?)`/g,'<code>$1</code>'); }
 
 /* ============================================================================
- * SETTINGS / export / import  (no API key — coach is offline)
+ * SETTINGS / export / import / Claude coach key
  * ==========================================================================*/
 function openSettings() {
+  const key = load('apikey', '');
   openModal(`<h2>Settings — ${esc(CFG.name)}</h2>
+    <h3 class="serif">Claude coach</h3>
+    <p class="small muted">${key ? 'In-app Claude coach is <strong>on</strong>.' : 'Offline coach is on (free). Add an Anthropic API key to chat with Claude in-app.'} Pay-as-you-go, device-only, sent only to api.anthropic.com.</p>
+    <label class="field">API key (sk-ant-…)</label>
+    <input id="set-key" type="password" placeholder="sk-ant-..." value="${key ? '••••••••••••' : ''}"/>
+    <div class="row" style="gap:8px;margin-top:8px">
+      <button class="btn full" onclick="updateKey()">${key ? 'Update key' : 'Save key'}</button>
+      ${key ? '<button class="btn danger" onclick="clearKey()">Turn off</button>' : ''}
+    </div>
+    <hr>
     <h3 class="serif">Backup / move devices</h3>
-    <p class="small muted">All ${esc(CFG.name)}'s data stays on this device. Export to back up or move.</p>
+    <p class="small muted">All ${esc(CFG.name)}'s data stays on this device (the API key is never included in a backup).</p>
     <div class="btn-grid">
       <button class="btn full" onclick="exportData()">⬇ Export JSON backup</button>
       <label class="btn full" style="cursor:pointer">⬆ Import JSON backup<input type="file" accept="application/json" class="sr" onchange="importData(event)"></label>
     </div>
     <hr>
-    <p class="small muted">The coach is <strong>offline and free</strong> — no API key, no cost, no network. It answers from your real log + the masterbrief rules.</p>
-    <p class="small muted" style="margin-top:8px">Targets are baked into <code>config.js</code>. ${CFG.estimates ? 'Her numbers are estimates — refine off the scale at week 2, not before.' : 'Jean\'s numbers are confirmed.'}</p>
-    <hr>
-    <button class="btn ghost full" onclick="switchUser()">Switch instance</button>
+    <p class="small muted">Targets are baked into <code>config.js</code>. ${CFG.estimates ? 'Her numbers are estimates — refine off the scale at week 2, not before.' : 'Jean\'s numbers are confirmed.'}</p>
+    <button class="btn ghost full" style="margin-top:10px" onclick="switchUser()">Switch instance</button>
     <button class="btn danger full" style="margin-top:10px" onclick="resetToday()">Clear today's log</button>`);
 }
+function updateKey() { const k = (val('set-key')||'').trim(); if (k && !/^•+$/.test(k)) { save('apikey', k); toast('Key updated'); } closeModal(); renderView(); }
+function clearKey() { localStorage.removeItem(NS()+'apikey'); closeModal(); toast('Claude coach off'); renderView(); }
 function resetToday() { if (confirm("Clear today's food log?")) { setLogsFor(todayKey(), []); closeModal(); toast('Today cleared'); renderView(); } }
 function switchUser() { location.search = ''; }
 function exportData() {
   const dump = { app:'kitchen-coach', user:USER, exported:new Date().toISOString(), data:{} };
-  for (let i=0;i<localStorage.length;i++){ const k=localStorage.key(i); if (k.startsWith(NS())) dump.data[k]=localStorage.getItem(k); }
+  for (let i=0;i<localStorage.length;i++){ const k=localStorage.key(i); if (k.startsWith(NS()) && k !== NS()+'apikey') dump.data[k]=localStorage.getItem(k); } // never export the key
   const blob = new Blob([JSON.stringify(dump,null,2)], { type:'application/json' });
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `kitchen-coach-${USER}-backup.json`; a.click(); URL.revokeObjectURL(a.href);
 }

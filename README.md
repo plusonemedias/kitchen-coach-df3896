@@ -43,23 +43,32 @@ Bookmark the right URL on each phone so they never mix up instances.
 - **Coach** — the offline coach (below).
 - **Kitchen** — this week's grocery list + Sunday batch steps.
 
-## The coach — offline & free (no API key)
+## The coach — two modes
 
-The coach is **fully offline**. It reads your **real logged data** (today's food, running totals,
-remaining macros, recent weigh-ins, day type) and the masterbrief rules, and answers locally —
-**no API key, no cost, no network call ever.**
+**Offline (default, free, no key).** Reads your real logged data (today's food, totals, remaining
+macros, recent weigh-ins, day type) + the masterbrief rules and answers locally — no network. Tap a
+chip or type: *What should I eat now? · Am I on track? · Plan my day · Eating out · Craving a snack ·
+Batch & grocery*, plus water/weight/protein. Enforces the couple rule (redirects Jean if he asks
+about her plate). Being rule-based, it won't free-form chat — it's focused on *this* plan.
 
-Tap a chip or type a question:
+**In-app Claude (optional, real conversation).** Paste a personal Anthropic API key in **Settings**
+(or the Coach tab) and the Coach tab becomes a real **Claude** chat — full back-and-forth, plus
+**food-photo verdicts** (attach a photo → ✅ eat / ✏️ edit / ❌ swap vs today's target). Every message
+carries your live log, so it answers off real numbers.
 
-- **What should I eat now?** — fits a real template meal to your remaining protein/calories
-- **Am I on track?** — today's numbers in a table with a verdict
-- **Plan my day** — your full meal template for today's day type, with a running calorie total
-- **Eating out**, **Craving a snack**, **Batch & grocery**, plus water, weight, and protein questions
+- The key is **pay-as-you-go and separate from any Claude subscription** (Pro/Max does *not* include
+  API access) — typically **~$1–3/month** for two casual users. Prompt caching keeps the masterbrief
+  nearly free per message.
+- Stored **only on this device**, sent **only to `api.anthropic.com`**, and **never included in a
+  backup export**. Remove it anytime in Settings (the offline coach keeps working).
+- Model is one constant at the top of `config.js`:
+  ```js
+  const CLAUDE_MODEL = 'claude-sonnet-4-6';   // or 'claude-opus-4-8' / a haiku model
+  ```
 
-It also enforces the couple rule: if Jean asks about her plate, it redirects him.
-
-> Because it's rule-based (not a large language model), it won't free-form chat about anything —
-> it's a focused coach for *this* plan and *your* data. Everything it says is grounded in your log.
+> Prefer no key at all? The offline coach covers the everyday questions, and
+> `CLAUDE-PROJECT-SETUP.md` shows how to use your Claude **Pro** plan via a Project for free
+> (copy-paste your log instead of an in-app key).
 
 ## Back up / move devices
 
