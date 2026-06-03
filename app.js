@@ -554,10 +554,10 @@ function chatSheetHTML() {
       <textarea id="chat-text" rows="1" placeholder="Ask NUTRAI…" oninput="autoGrow(this)" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChat()}"></textarea>
       <button class="btn primary" style="flex:none" onclick="sendChat()" aria-label="Send">›</button>
     </div>
-    ${key ? '' : `<div class="chat-foot">
-      <button class="btn royal full" onclick="enableClaudePrompt()">✨ Turn on in-app Claude</button>
-      <button class="btn ghost full small" style="margin-top:8px" onclick="copyForClaude()">⧉ Or copy for my Claude Project</button>
-    </div>`}
+    <div class="chat-foot">
+      <button class="btn royal full small" onclick="copyForClaude()">⧉ Copy my log for my agent</button>
+      ${key ? '' : `<button class="btn ghost full small" style="margin-top:8px" onclick="enableClaudePrompt()">✨ Turn on in-app Claude</button>`}
+    </div>
   </div>`;
 }
 function enableClaudePrompt() {
@@ -585,15 +585,16 @@ function coachContext() {
   return L.join('\n');
 }
 
-/* Snapshot to paste into a Claude Project (data + the user's question). */
+/* Snapshot to paste into a Claude Project / agent (data + the user's question). */
 function coachSnapshot(question) {
-  return `# Kitchen Coach check-in — ${CFG.name}\n${coachContext()}\n\nMy question: ${question && question.trim() ? question.trim() : '(type your question)'}`;
+  const q = question && question.trim() ? question.trim() : 'What should I do from here?';
+  return `# NUTRAI log — ${CFG.name}\n${coachContext()}\n\nMy question: ${q}`;
 }
 async function copyForClaude() {
   const text = coachSnapshot(val('chat-text'));
-  try { await navigator.clipboard.writeText(text); toast('Copied — paste into your Claude Project'); }
+  try { await navigator.clipboard.writeText(text); toast('Copied — paste it to your agent'); }
   catch {
-    openModal(`<h2>Copy for your Claude coach</h2>
+    openModal(`<h2>Copy my log for my agent</h2>
       <p class="small muted">Tap the box to select all, copy, then paste into your Kitchen Coach Project in the Claude app.</p>
       <textarea rows="13" readonly onclick="this.select()">${esc(text)}</textarea>`);
   }
