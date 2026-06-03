@@ -567,7 +567,14 @@ function enableClaudePrompt() {
     <input id="key-input" type="password" placeholder="sk-ant-..."/>
     <button class="btn primary full" style="margin-top:12px" onclick="saveKey()">Save &amp; turn on</button>`);
 }
-function saveKey() { const k = (val('key-input')||'').trim(); if (k) { save('apikey', k); toast('Claude turned on'); closeModal(); if (chatOpen()) openChat(); else renderView(); } }
+function cleanKey(s) { return (s||'').replace(/\s+/g,''); }  // strip ALL whitespace/newlines
+function saveKey() {
+  const k = cleanKey(val('key-input'));
+  if (!k) return;
+  if (!k.startsWith('sk-ant-')) { toast('That doesn\'t look like a key (sk-ant-…)'); return; }
+  save('apikey', k); toast('Claude turned on'); closeModal();
+  if (chatOpen()) openChat(); else renderView();
+}
 
 /* Live-data context block injected into each Claude message (data only, no question). */
 function coachContext() {
@@ -672,7 +679,8 @@ async function sendChat() {
     const reply = (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n').trim();
     const chat2 = load('chat', []); chat2.push({ role: 'assistant', content: reply || '(no response)' }); save('chat', chat2);
   } catch (err) {
-    const chat2 = load('chat', []); chat2.push({ role: 'assistant', error: true, content: `Couldn't reach Claude: ${err.message}. Check your API key in Settings — the offline coach still works.` }); save('chat', chat2);
+    const detail = err && err.name === 'TypeError' ? 'the request was blocked or the key has a stray character — re-paste your key in ⚙ Settings' : (err && err.message ? err.message : 'unknown error');
+    const chat2 = load('chat', []); chat2.push({ role: 'assistant', error: true, content: `Couldn't reach Claude: ${detail}. (The offline coach still works.)` }); save('chat', chat2);
   }
   const typing2 = document.getElementById('typing'); if (typing2) typing2.classList.add('hide');
   refreshChat();
@@ -826,7 +834,7 @@ function openSettings() {
     <button class="btn ghost full" style="margin-top:10px" onclick="switchUser()">Switch instance</button>
     <button class="btn danger full" style="margin-top:10px" onclick="resetToday()">Clear today's log</button>`);
 }
-function updateKey() { const k = (val('set-key')||'').trim(); if (k && !/^•+$/.test(k)) { save('apikey', k); toast('Key updated'); } closeModal(); renderView(); }
+function updateKey() { const k = cleanKey(val('set-key')); if (k && !/^•+$/.test(k)) { if (!k.startsWith('sk-ant-')) { toast('That doesn\'t look like a key (sk-ant-…)'); return; } save('apikey', k); toast('Key updated'); } closeModal(); renderView(); }
 function clearKey() { localStorage.removeItem(NS()+'apikey'); closeModal(); toast('Claude coach off'); renderView(); }
 function resetToday() { if (confirm("Clear today's food log?")) { setLogsFor(todayKey(), []); closeModal(); toast('Today cleared'); renderView(); } }
 function switchUser() { location.search = ''; }
