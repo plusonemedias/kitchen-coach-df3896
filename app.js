@@ -116,12 +116,11 @@ function render() {
       ${tabBtn('log','Log','✦')}
       ${tabBtn('menu','Menu','▤')}
       ${tabBtn('weigh','Weigh','♛')}
-      ${tabBtn('coach','Coach','✉')}
-      ${tabBtn('kitchen','Kitchen','⚜')}
-    </nav>`;
+    </nav>
+    <button class="fab" onclick="openChat()" aria-label="Ask NUTRAI">✦ Ask&nbsp;NUTRAI</button>`;
   renderView();
 }
-const TAB_ORDER = ['today','log','menu','weigh','coach','kitchen'];
+const TAB_ORDER = ['today','log','menu','weigh'];
 function tabBtn(id, label, icon) { return `<button class="${activeTab===id?'active':''}" onclick="go('${id}')"><span class="ti">${icon}</span>${label}</button>`; }
 function go(tab) { activeTab = tab; renderView(); document.querySelectorAll('.tabbar button').forEach((b,i)=>b.classList.toggle('active',TAB_ORDER[i]===tab)); }
 
@@ -131,8 +130,6 @@ function renderView() {
   else if (activeTab === 'log') v.innerHTML = viewLog();
   else if (activeTab === 'menu') v.innerHTML = viewMenu();
   else if (activeTab === 'weigh') v.innerHTML = viewWeigh();
-  else if (activeTab === 'coach') { v.innerHTML = viewCoach(); mountChat(); }
-  else if (activeTab === 'kitchen') v.innerHTML = viewKitchen();
 }
 
 /* ============================================================================
@@ -512,24 +509,8 @@ function viewMenu() {
 }
 
 /* ============================================================================
- * KITCHEN (grocery + batch)
- * ==========================================================================*/
-function viewKitchen() {
-  return `
-  <div class="card">
-    <div class="card-title">This week's grocery list</div>
-    ${GROCERY_LIST.map(g=>`<h3 class="serif" style="color:var(--royal);margin-top:12px">${esc(g.cat)}</h3><ul class="tidy">${g.items.map(i=>`<li>${esc(i)}</li>`).join('')}</ul>`).join('')}
-    <p class="small muted" style="margin-top:10px">${esc(GROCERY_BUDGET)}</p>
-  </div>
-  <div class="card">
-    <div class="card-title">Sunday batch · ~2 hrs</div>
-    <p class="small muted" style="margin-top:-6px">Oven + rice cooker + stovetop running in parallel.</p>
-    <ol class="tidy">${BATCH_STEPS.map(s=>`<li>${esc(s)}</li>`).join('')}</ol>
-  </div>`;
-}
-
-/* ============================================================================
- * COACH — in-app Claude when an API key is set, offline rules coach otherwise.
+ * NUTRAI CHAT — a floating chat box reachable from every tab.
+ * Uses Claude when an API key is set, offline rules coach otherwise.
  * ==========================================================================*/
 const COACH_CHIPS = [
   'What should I eat now?',
@@ -537,58 +518,57 @@ const COACH_CHIPS = [
   'Plan my day',
   'Eating out',
   'Craving a snack',
-  'Batch & grocery',
 ];
 let pendingImage = null; // { dataUrl, mediaType, base64 } for photo verdicts
 
-function viewCoach() {
-  const chat = load('chat', []);
-  const key = load('apikey', '');
-
-  // No key → offline coach + one-tap Copy into your free Claude Project (her route).
-  if (!key) return `
-    <div class="card">
-      <div class="card-title">Your Claude coach</div>
-      <p class="small">Ask below for an instant offline answer — or tap <strong>Copy for Claude</strong> and paste it (with today's log) into your free <strong>Kitchen Coach</strong> Project in the Claude app. One-time setup: <code>CLAUDE-PROJECT-SETUP.md</code>.</p>
-    </div>
-    <div class="card" style="display:flex;flex-direction:column;min-height:44vh">
-      <div class="card-title">Quick coach · offline · instant · free</div>
-      <div class="chat-scroll" id="chat-scroll">
-        ${chat.length ? chat.map(renderMsg).join('') : `<div class="msg assistant">${mdLite(coachGreeting())}</div>`}
-      </div>
-      <div class="chips">${COACH_CHIPS.map(c=>`<button class="chip" onclick="coachAsk(this.textContent)">${esc(c)}</button>`).join('')}</div>
-      <div class="chat-input">
-        <textarea id="chat-text" rows="1" placeholder="Ask the coach…" oninput="autoGrow(this)" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChat()}"></textarea>
-        <button class="btn primary" style="flex:none" onclick="sendChat()" aria-label="Send">›</button>
-      </div>
-      <button class="btn royal full" style="margin-top:10px" onclick="copyForClaude()">⧉ Copy this for my Claude coach</button>
-    </div>
-    <div class="card tight">
-      <div class="card-title">Or chat in-app</div>
-      <p class="small muted">Paste a personal Anthropic API key (pay-as-you-go, ~$1–3/mo, separate from a Claude subscription) to chat with Claude right here — with food-photo verdicts. Device-only, sent only to api.anthropic.com.</p>
-      <label class="field">API key (sk-ant-…)</label>
-      <input id="key-input" type="password" placeholder="sk-ant-..."/>
-      <button class="btn full" style="margin-top:10px" onclick="saveKey()">Turn on in-app Claude</button>
-    </div>`;
-
-  // Key set → real Claude chat with photo attach.
-  return `
-    <div class="card" style="display:flex;flex-direction:column;min-height:64vh">
-      <div class="card-title">Coach · Claude · reads today's log</div>
-      <div class="chat-scroll" id="chat-scroll">
-        ${chat.length ? chat.map(renderMsg).join('') : `<div class="msg assistant">${mdLite(coachGreeting())}</div>`}
-      </div>
-      <div id="typing" class="typing hide">Coach is thinking…</div>
-      <div class="chips">${COACH_CHIPS.map(c=>`<button class="chip" onclick="coachAsk(this.textContent)">${esc(c)}</button>`).join('')}</div>
-      <div id="attach-row"></div>
-      <div class="chat-input">
-        <label class="icon-btn" title="Attach a food photo" style="flex:none">📷<input id="photo" type="file" accept="image/*" class="sr" onchange="pickPhoto(event)"></label>
-        <textarea id="chat-text" rows="1" placeholder="Ask Claude… or attach a photo" oninput="autoGrow(this)" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChat()}"></textarea>
-        <button class="btn primary" style="flex:none" onclick="sendChat()" aria-label="Send">›</button>
-      </div>
-    </div>`;
+function chatOpen() { return !!document.getElementById('chat-bg'); }
+function openChat() {
+  closeChat();
+  const bg = document.createElement('div'); bg.className = 'chat-bg'; bg.id = 'chat-bg';
+  bg.onclick = e => { if (e.target === bg) closeChat(); };
+  bg.innerHTML = chatSheetHTML();
+  document.body.appendChild(bg);
+  const s = document.getElementById('chat-scroll'); if (s) s.scrollTop = s.scrollHeight;
 }
-function saveKey() { const k = (val('key-input')||'').trim(); if (k) { save('apikey', k); toast('Claude coach on'); renderView(); } }
+function closeChat() { const b = document.getElementById('chat-bg'); if (b) b.remove(); }
+function chatMessagesHTML() {
+  const chat = load('chat', []);
+  return chat.length ? chat.map(renderMsg).join('') : `<div class="msg assistant">${mdLite(coachGreeting())}</div>`;
+}
+function refreshChat() { const s = document.getElementById('chat-scroll'); if (s) { s.innerHTML = chatMessagesHTML(); s.scrollTop = s.scrollHeight; } }
+function chatSheetHTML() {
+  const key = load('apikey', '');
+  return `<div class="chat-sheet">
+    <div class="chat-head">
+      <span class="chat-crest">N</span>
+      <div><div class="chat-title">NUTRAI</div><div class="chat-sub">${key ? 'Claude · reads your log' : 'offline · add a key for full Claude'}</div></div>
+      <span class="spacer"></span>
+      <button class="icon-btn" onclick="closeChat()" aria-label="Close">✕</button>
+    </div>
+    <div class="chat-scroll" id="chat-scroll">${chatMessagesHTML()}</div>
+    <div id="typing" class="typing hide">NUTRAI is thinking…</div>
+    <div class="chips">${COACH_CHIPS.map(c=>`<button class="chip" onclick="coachAsk(this.textContent)">${esc(c)}</button>`).join('')}</div>
+    <div id="attach-row"></div>
+    <div class="chat-input">
+      ${key ? `<label class="icon-btn" title="Attach a food photo" style="flex:none">📷<input id="photo" type="file" accept="image/*" class="sr" onchange="pickPhoto(event)"></label>` : ''}
+      <textarea id="chat-text" rows="1" placeholder="Ask NUTRAI…" oninput="autoGrow(this)" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChat()}"></textarea>
+      <button class="btn primary" style="flex:none" onclick="sendChat()" aria-label="Send">›</button>
+    </div>
+    ${key ? '' : `<div class="chat-foot">
+      <button class="btn royal full" onclick="enableClaudePrompt()">✨ Turn on in-app Claude</button>
+      <button class="btn ghost full small" style="margin-top:8px" onclick="copyForClaude()">⧉ Or copy for my Claude Project</button>
+    </div>`}
+  </div>`;
+}
+function enableClaudePrompt() {
+  openModal(`<h2>Turn on in-app Claude</h2>
+    <p class="small muted">Paste a personal Anthropic API key (pay-as-you-go, ~$1–3/mo, separate from a Claude subscription). Stored only on this device, sent only to api.anthropic.com.</p>
+    <p class="small muted">Get one at <strong>console.anthropic.com → API keys</strong>.</p>
+    <label class="field">API key (sk-ant-…)</label>
+    <input id="key-input" type="password" placeholder="sk-ant-..."/>
+    <button class="btn primary full" style="margin-top:12px" onclick="saveKey()">Save &amp; turn on</button>`);
+}
+function saveKey() { const k = (val('key-input')||'').trim(); if (k) { save('apikey', k); toast('Claude turned on'); closeModal(); if (chatOpen()) openChat(); else renderView(); } }
 
 /* Live-data context block injected into each Claude message (data only, no question). */
 function coachContext() {
@@ -648,13 +628,16 @@ async function sendChat() {
   chat.push({ role:'user', content: text || '(photo)', image: pendingImage ? pendingImage.dataUrl : null });
   save('chat', chat);
 
+  // clear the input + any attached-photo chip immediately
+  const ta = document.getElementById('chat-text'); if (ta) { ta.value = ''; autoGrow(ta); }
+
   // No key → instant offline rules coach.
-  if (!key) { chat.push({ role:'assistant', content: coachReply(text) }); save('chat', chat); renderView(); return; }
+  if (!key) { chat.push({ role:'assistant', content: coachReply(text) }); save('chat', chat); refreshChat(); return; }
 
   // Key → real Claude call.
   const imageForApi = pendingImage; pendingImage = null;
-  const ta = document.getElementById('chat-text'); if (ta) ta.value = '';
-  renderView();
+  const ar = document.getElementById('attach-row'); if (ar) ar.innerHTML = '';
+  refreshChat();
   const typing = document.getElementById('typing'); if (typing) typing.classList.remove('hide');
 
   const dt = dayTypeFor();
@@ -689,9 +672,10 @@ async function sendChat() {
     const reply = (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n').trim();
     const chat2 = load('chat', []); chat2.push({ role: 'assistant', content: reply || '(no response)' }); save('chat', chat2);
   } catch (err) {
-    const chat2 = load('chat', []); chat2.push({ role: 'assistant', error: true, content: `Couldn't reach Claude: ${err.message}. Check your API key in Settings — the offline quick coach still works.` }); save('chat', chat2);
+    const chat2 = load('chat', []); chat2.push({ role: 'assistant', error: true, content: `Couldn't reach Claude: ${err.message}. Check your API key in Settings — the offline coach still works.` }); save('chat', chat2);
   }
-  renderView();
+  const typing2 = document.getElementById('typing'); if (typing2) typing2.classList.add('hide');
+  refreshChat();
 }
 
 /* ---- the offline coach brain ---- */
@@ -715,7 +699,8 @@ function suggestForProtein(pLeft) {
 }
 function coachGreeting() {
   const s = liveSnapshot();
-  return `I'm your kitchen coach — fully offline, reading your real log. Today is a **${s.dt.short}** day: target **${s.dt.kcal.toLocaleString()} kcal / ${s.dt.protein}g protein**.\n\nTap a chip below or ask me anything.`;
+  const key = load('apikey','');
+  return `I'm **NUTRAI** — I read your real log. Today is a **${s.dt.short}** day: target **${s.dt.kcal.toLocaleString()} kcal / ${s.dt.protein}g protein**.${key?'':' (Offline mode — add a key for full Claude answers.)'}\n\nTap a chip or ask me anything.`;
 }
 function coachReply(text) {
   const q = ' ' + text.toLowerCase() + ' ';

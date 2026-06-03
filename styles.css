@@ -131,9 +131,27 @@ a { color: var(--gold); text-decoration: none; }
 .menu-row .mc { text-align: right; font-size: .8rem; color: var(--gold); font-weight: 500; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .menu-row .mc small { display: block; color: var(--muted); font-weight: 300; }
 
-/* tighten the bar now that there are six tabs */
-.tabbar button { font-size: .62rem; }
-.tabbar .ti { font-size: 1.15rem; }
+/* Floating "Ask NUTRAI" button — present on every tab */
+.fab { position: fixed; right: 16px; bottom: calc(74px + env(safe-area-inset-bottom)); z-index: 15;
+  background: var(--royal); color: #fff; border: none; border-radius: 999px; padding: 12px 18px;
+  font-size: .9rem; font-weight: 500; letter-spacing: .02em; display: inline-flex; align-items: center; gap: 6px;
+  box-shadow: 0 6px 20px rgba(27,42,74,.32); max-width: 540px; }
+.fab::first-letter { color: var(--gold-2); }
+.fab:active { transform: scale(.97); }
+@media (min-width: 552px) { .fab { right: calc(50% - 270px + 16px); } }
+
+/* NUTRAI chat bottom-sheet */
+.chat-bg { position: fixed; inset: 0; background: rgba(30,24,8,.4); display: flex; align-items: flex-end; justify-content: center; z-index: 25; }
+.chat-sheet { background: var(--bg); border: 1px solid var(--line); border-radius: 22px 22px 0 0; width: 100%; max-width: 540px;
+  height: 88vh; display: flex; flex-direction: column; padding: 14px 16px calc(14px + env(safe-area-inset-bottom)); }
+.chat-head { display: flex; align-items: center; gap: 10px; padding-bottom: 10px; border-bottom: 1px solid var(--line); margin-bottom: 8px; }
+.chat-crest { width: 36px; height: 36px; border-radius: 50%; background: var(--royal); color: var(--gold-2); display: grid; place-items: center; font-family: var(--serif); font-weight: 700; }
+.chat-title { font-family: var(--serif); font-size: 1.15rem; line-height: 1.05; }
+.chat-sub { font-size: .72rem; color: var(--muted); }
+.chat-sheet .chat-scroll { flex: 1; overflow-y: auto; }
+.chat-sheet .chips { flex: none; }
+.chat-foot { flex: none; margin-top: 8px; }
+.btn.small { min-height: 40px; padding: 8px 14px; font-size: .82rem; }
 
 /* Water */
 .water-bar { height: 12px; border-radius: 8px; background: var(--ring-track); overflow: hidden; }
