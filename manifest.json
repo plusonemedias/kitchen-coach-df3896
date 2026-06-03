@@ -1,7 +1,7 @@
 {
-  "name": "Kitchen Coach",
-  "short_name": "Kitchen",
-  "description": "Personal nutrition tracker with an embedded coach. Single-person, data stays on this device.",
+  "name": "NUTRAI",
+  "short_name": "NUTRAI",
+  "description": "Personal AI nutrition tracker. Single-person, data stays on this device.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",

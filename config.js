@@ -159,6 +159,67 @@ const GF_LIBRARY = [
 ];
 
 /* ============================================================================
+ * FOOD ESTIMATE TABLE — the offline brain behind "type it, NUTRAI guesses it".
+ * Macros are per ONE base unit. keys = words to match in what the user types.
+ * unit: 'tbsp' | 'unit' (whole item) | 'slice' | 'cup' | 'can' | 'handful' | '100g'.
+ * For '100g' foods with no grams given, a default serving (serv × 100g) is used.
+ * Edit/extend freely — this is just common-food common-sense.
+ * ==========================================================================*/
+const FOOD_DB = [
+  // spreads / fats (per tablespoon)
+  { keys:['peanut butter','pb'],        unit:'tbsp', kcal:94,  p:4, c:3,  f:8 },
+  { keys:['almond butter'],             unit:'tbsp', kcal:98,  p:3, c:3,  f:9 },
+  { keys:['nutella'],                   unit:'tbsp', kcal:100, p:1, c:11, f:6 },
+  { keys:['butter'],                    unit:'tbsp', kcal:102, p:0, c:0,  f:12 },
+  { keys:['olive oil','oil'],           unit:'tbsp', kcal:119, p:0, c:0,  f:14 },
+  { keys:['mayo','mayonnaise'],         unit:'tbsp', kcal:90,  p:0, c:0,  f:10 },
+  { keys:['honey'],                     unit:'tbsp', kcal:64,  p:0, c:17, f:0 },
+  { keys:['jam','jelly'],               unit:'tbsp', kcal:56,  p:0, c:14, f:0 },
+  { keys:['ketchup'],                   unit:'tbsp', kcal:17,  p:0, c:5,  f:0 },
+  // whole fruit / items (per unit)
+  { keys:['pear'],                      unit:'unit', kcal:100, p:1, c:27, f:0 },
+  { keys:['apple'],                     unit:'unit', kcal:95,  p:0, c:25, f:0 },
+  { keys:['banana'],                    unit:'unit', kcal:105, p:1, c:27, f:0 },
+  { keys:['orange'],                    unit:'unit', kcal:62,  p:1, c:15, f:0 },
+  { keys:['peach'],                     unit:'unit', kcal:59,  p:1, c:14, f:0 },
+  { keys:['kiwi'],                      unit:'unit', kcal:42,  p:1, c:10, f:0 },
+  { keys:['avocado'],                   unit:'unit', kcal:240, p:3, c:12, f:22 },
+  { keys:['egg'],                       unit:'unit', kcal:78,  p:6, c:1,  f:5 },
+  { keys:['date','dates'],              unit:'unit', kcal:66,  p:0, c:18, f:0 },
+  // bread / carbs (per slice / unit)
+  { keys:['bread','toast'],             unit:'slice', kcal:80, p:3, c:14, f:1 },
+  { keys:['bagel'],                     unit:'unit', kcal:250, p:10,c:48, f:2 },
+  { keys:['tortilla','wrap'],           unit:'unit', kcal:140, p:4, c:24, f:3 },
+  { keys:['cracker'],                   unit:'unit', kcal:16,  p:0, c:3,  f:0 },
+  // dairy / cheese
+  { keys:['cheese'],                    unit:'slice', kcal:80, p:5, c:1,  f:6 },
+  { keys:['milk'],                      unit:'cup',   kcal:120,p:8, c:12, f:5 },
+  { keys:['greek yogurt','yogurt'],     unit:'cup',   kcal:130,p:17,c:9,  f:4 },
+  // handfuls
+  { keys:['almonds','nuts','walnuts','cashews','peanuts'], unit:'handful', kcal:170, p:6, c:6, f:15 },
+  { keys:['chips'],                     unit:'handful', kcal:150, p:2, c:15, f:10 },
+  { keys:['popcorn'],                   unit:'cup',     kcal:31,  p:1, c:6,  f:0 },
+  { keys:['raisins','dried fruit'],     unit:'handful', kcal:130, p:1, c:34, f:0 },
+  // cooked staples (per 100g; default serving below)
+  { keys:['chicken breast','chicken'],  unit:'100g', kcal:165, p:31, c:0,  f:3.6, serv:1.5 },
+  { keys:['turkey'],                    unit:'100g', kcal:170, p:29, c:0,  f:7,   serv:1.5 },
+  { keys:['beef','steak'],              unit:'100g', kcal:250, p:26, c:0,  f:17,  serv:1.5 },
+  { keys:['salmon'],                    unit:'100g', kcal:208, p:20, c:0,  f:13,  serv:1.5 },
+  { keys:['tuna'],                      unit:'can',  kcal:100, p:22, c:0,  f:1 },
+  { keys:['rice'],                      unit:'100g', kcal:130, p:2.7,c:28, f:0.3, serv:1.8 },
+  { keys:['pasta','spaghetti'],         unit:'100g', kcal:158, p:6,  c:31, f:1,   serv:1.8 },
+  { keys:['potato','potatoes'],         unit:'100g', kcal:87,  p:2,  c:20, f:0.1, serv:2 },
+  { keys:['oatmeal','oats','oatmeal'],  unit:'100g', kcal:68,  p:2.4,c:12, f:1.4, serv:2.4 },
+  { keys:['salad','greens','veg','vegetables','broccoli'], unit:'cup', kcal:35, p:2, c:7, f:0 },
+  // drinks
+  { keys:['coffee','espresso'],         unit:'cup',  kcal:5,   p:0, c:1,  f:0 },
+  { keys:['orange juice','juice'],      unit:'cup',  kcal:112, p:2, c:26, f:0 },
+  { keys:['soda','coke','pop'],         unit:'cup',  kcal:140, p:0, c:39, f:0 },
+  { keys:['beer'],                      unit:'unit', kcal:153, p:2, c:13, f:0 },
+  { keys:['wine'],                      unit:'cup',  kcal:125, p:0, c:4,  f:0 },
+];
+
+/* ============================================================================
  * GROCERY LIST + SUNDAY BATCH STEPS (Kitchen tab + coach). Edit in code.
  * ==========================================================================*/
 const GROCERY_LIST = [

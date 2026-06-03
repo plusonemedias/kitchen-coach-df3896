@@ -97,7 +97,7 @@ function render() {
   if (!USER || !CFG) { renderChooser(); return; }
   document.documentElement.style.setProperty('--gold', CFG.accent);
   document.documentElement.style.setProperty('--royal', CFG.accent2);
-  document.title = `Kitchen Coach — ${CFG.name}`;
+  document.title = `NUTRAI — ${CFG.name}`;
   const dt = dayTypeFor();
   app().innerHTML = `
     <header class="app-header">
@@ -304,7 +304,7 @@ function viewLog() {
     ${entries.length ? `<ul class="timeline">${entries.map(e=>`
       <li class="entry ${e.kind==='nibble'?'nibble':''} ${inWindow(e)?'':'outside'}">
         <span class="time">${fmtTime(e.time)}</span>
-        <span class="nm">${esc(e.name)}<div class="mc">${e.kcal} kcal · ${e.p}g P${e.c?` · ${e.c}C`:''}${e.f?` · ${e.f}F`:''}</span></span>
+        <span class="nm">${esc(e.name)}<div class="mc">${e.approx?'≈ ':''}${e.kcal} kcal · ${e.p}g P${e.c?` · ${e.c}C`:''}${e.f?` · ${e.f}F`:''}</span></span>
         <button class="x" title="Edit" onclick="editEntry('${e.id}')">✎</button>
         <button class="x" title="Delete" onclick="delEntry('${e.id}');renderView()">✕</button>
       </li>`).join('')}</ul>` : '<p class="muted small">Nothing logged yet. Tap a meal above.</p>'}
@@ -312,9 +312,7 @@ function viewLog() {
 }
 function openManual(entry) {
   const e = entry || {};
-  openModal(`<h2>${entry?'Edit entry':'Manual add'}</h2>
-    <label class="field">Name</label>
-    <input id="m-name" value="${esc(e.name||'')}" placeholder="e.g. Chicken shawarma"/>
+  const exact = `
     <div class="field-row three">
       <div><label class="field">kcal</label><input id="m-k" type="number" inputmode="numeric" value="${e.kcal||''}"/></div>
       <div><label class="field">protein g</label><input id="m-p" type="number" inputmode="numeric" value="${e.p||''}"/></div>
@@ -323,8 +321,26 @@ function openManual(entry) {
     <div class="field-row">
       <div><label class="field">carbs g <span class="muted">(opt)</span></label><input id="m-c" type="number" inputmode="numeric" value="${e.c||''}"/></div>
       <div><label class="field">fat g <span class="muted">(opt)</span></label><input id="m-f" type="number" inputmode="numeric" value="${e.f||''}"/></div>
-    </div>
-    <button class="btn primary full" style="margin-top:16px" onclick="saveManual('${e.id||''}')">${entry?'Save':'Add'}</button>`);
+    </div>`;
+  if (entry) { // EDIT — exact fields
+    openModal(`<h2>Edit entry</h2>
+      <label class="field">Name</label>
+      <input id="m-name" value="${esc(e.name||'')}"/>
+      ${exact}
+      <button class="btn primary full" style="margin-top:16px" onclick="saveManual('${e.id||''}')">Save</button>`);
+    return;
+  }
+  // ADD — estimate-first
+  const usingAI = !!load('apikey','');
+  openModal(`<h2>Add food</h2>
+    <label class="field">What did you eat?</label>
+    <input id="m-name" placeholder="e.g. 2 spoons peanut butter, 1 pear"/>
+    <button class="btn primary full" id="m-est" style="margin-top:12px" onclick="estimateAndLog()">✨ Estimate &amp; log</button>
+    <p class="small muted" style="margin-top:8px">NUTRAI fills in the macros ${usingAI?'using Claude':'from its built-in food table'}. It'll show as <strong>≈ approx</strong> — tap ✎ on the entry to fine-tune.</p>
+    <hr>
+    <p class="small muted">Know the numbers? Enter them instead:</p>
+    ${exact}
+    <button class="btn full" style="margin-top:12px" onclick="saveManual('')">Add with these numbers</button>`);
 }
 function saveManual(id) {
   const data = { name: val('m-name')||'Food', kcal:+val('m-k')||0, p:+val('m-p')||0, c:+val('m-c')||0, f:+val('m-f')||0, time:val('m-t')||nowHM() };
@@ -333,6 +349,69 @@ function saveManual(id) {
   closeModal(); toast('Logged'); renderView();
 }
 function editEntry(id) { const e = logsFor().find(x=>x.id===id); if (e) openManual(e); }
+
+/* ----- NUTRAI estimate: AI when a key is set, offline food table otherwise ----- */
+async function estimateAndLog() {
+  const name = (val('m-name')||'').trim(); if (!name) { toast('Type what you ate'); return; }
+  const time = val('m-t') || nowHM();
+  const btn = document.getElementById('m-est'); if (btn) { btn.textContent = 'Estimating…'; btn.disabled = true; }
+  let est = null;
+  if (load('apikey','')) { try { est = await estimateAI(name); } catch {} }
+  if (!est) est = estimateLocal(name);
+  if (!est) {
+    addEntry({ name, kcal:0, p:0, c:0, f:0, time, approx:true });
+    closeModal(); renderView(); toast('Logged — tap ✎ to add numbers');
+    return;
+  }
+  addEntry({ name, kcal:est.kcal, p:est.p, c:est.c, f:est.f, time, approx:true });
+  closeModal(); renderView();
+  toast(`≈ ${est.kcal} kcal · ${est.p}g P`);
+}
+// Offline estimator: parse quantity + portion, match a food, scale macros.
+function estimateLocal(text) {
+  const q = ' ' + text.toLowerCase().replace(/[,]/g,' ') + ' ';
+  const food = FOOD_DB.find(f => f.keys.some(k => q.includes(k)));
+  if (!food) return null;
+  // quantity
+  let qty = 1;
+  const num = q.match(/(\d+(?:\.\d+)?)/);
+  const words = { ' a ':1,' an ':1,' one ':1,' two ':2,' three ':3,' four ':4,' five ':5,' half ':0.5,' couple ':2,' few ':3 };
+  if (num) qty = parseFloat(num[1]);
+  else { for (const w in words) if (q.includes(w)) { qty = words[w]; break; } }
+  const grams = q.match(/(\d+(?:\.\d+)?)\s*g\b/);
+  let amount; // multiples of the food's base unit
+  if (food.unit === '100g') {
+    amount = grams ? parseFloat(grams[1]) / 100 : qty * (food.serv || 1.5);
+  } else if (food.unit === 'tbsp') {
+    let per = 1;
+    if (/small spoon|tea ?spoon|tsp|little/.test(q)) per = 0.5;
+    else if (/big spoon|large spoon|heaping|tablespoon|tbsp|regular spoon|spoon|scoop/.test(q)) per = 1;
+    amount = qty * per;
+  } else { // unit / slice / cup / can / handful
+    amount = qty;
+  }
+  const r = n => Math.round(n * amount);
+  return { kcal: r(food.kcal), p: r(food.p), c: r(food.c), f: r(food.f), approx: true };
+}
+// AI estimator: ask Claude for tight JSON macros (uses the in-app key).
+async function estimateAI(text) {
+  const key = load('apikey',''); if (!key) return null;
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'content-type':'application/json', 'x-api-key':key, 'anthropic-version':ANTHROPIC_VERSION, 'anthropic-dangerous-direct-browser-access':'true' },
+    body: JSON.stringify({
+      model: CLAUDE_MODEL, max_tokens: 120,
+      system: 'You estimate the macros of a described food/portion. Reply with ONLY compact JSON, no prose: {"kcal":int,"protein":int,"carbs":int,"fat":int}. Assume a typical portion if unspecified.',
+      messages: [{ role:'user', content: `Estimate macros for: ${text}` }],
+    }),
+  });
+  if (!res.ok) return null;
+  const data = await res.json();
+  const txt = (data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('');
+  const m = txt.match(/\{[\s\S]*\}/); if (!m) return null;
+  const j = JSON.parse(m[0]);
+  return { kcal:Math.round(+j.kcal||0), p:Math.round(+j.protein||0), c:Math.round(+j.carbs||0), f:Math.round(+j.fat||0), approx:true };
+}
 
 /* ============================================================================
  * WEIGH-IN
@@ -799,9 +878,9 @@ function val(id) { const el = document.getElementById(id); return el ? el.value 
 
 /* ---------------- chooser ---------------- */
 function renderChooser() {
-  document.title = 'Kitchen Coach';
+  document.title = 'NUTRAI';
   app().innerHTML = `<div class="chooser">
-    <div class="brand">Kitchen <span class="g serif">Coach</span></div>
+    <div class="brand">NUTR<span class="g serif">AI</span></div>
     <p class="muted">Two private trackers. Pick yours — data never crosses over.</p>
     <a class="pick jean" href="?user=jean"><span class="seal">J</span> Jean</a>
     <a class="pick gf" href="?user=gf"><span class="seal">H</span> Her</a>

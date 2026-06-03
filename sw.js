@@ -1,6 +1,6 @@
 /* Kitchen Coach service worker — network-first so updates always land when
  * online; falls back to cache offline. App data lives in localStorage. */
-const CACHE = 'kitchen-coach-v8';
+const CACHE = 'kitchen-coach-v9';
 const ASSETS = [
   './', './index.html', './styles.css', './config.js', './app.js',
   './manifest.json', './icons/icon.svg', './icons/icon-maskable.svg',
