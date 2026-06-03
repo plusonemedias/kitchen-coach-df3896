@@ -194,7 +194,6 @@ function viewToday() {
     </div>
   </div>
 
-  ${CFG.deskNibble ? deskNibbleCard() : ''}
   ${week2Prompt()}
   `;
 }
