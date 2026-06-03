@@ -608,13 +608,32 @@ async function copyForClaude() {
 
 function pickPhoto(ev) {
   const file = ev.target.files[0]; if (!file) return;
+  const row = document.getElementById('attach-row');
+  if (row) row.innerHTML = `<div class="attach-chip">📎 preparing photo… <button class="x" onclick="clearPhoto()">✕</button></div>`;
   const reader = new FileReader();
   reader.onload = () => {
-    pendingImage = { dataUrl: reader.result, mediaType: file.type, base64: String(reader.result).split(',')[1] };
-    const row = document.getElementById('attach-row');
-    if (row) row.innerHTML = `<div class="attach-chip">📎 Photo attached — ask for a ✅/✏️/❌ verdict <button class="x" onclick="clearPhoto()">✕</button></div>`;
+    // Convert ANY photo (incl. iPhone HEIC) to JPEG + downscale → Claude only accepts jpeg/png/gif/webp.
+    const img = new Image();
+    img.onload = () => {
+      const max = 1024; let w = img.width, h = img.height;
+      if (Math.max(w, h) > max) { const s = max / Math.max(w, h); w = Math.round(w*s); h = Math.round(h*s); }
+      let dataUrl, mediaType = 'image/jpeg';
+      try {
+        const c = document.createElement('canvas'); c.width = w; c.height = h;
+        c.getContext('2d').drawImage(img, 0, 0, w, h);
+        dataUrl = c.toDataURL('image/jpeg', 0.82);
+      } catch { dataUrl = reader.result; mediaType = file.type || 'image/jpeg'; }
+      setPendingImage(dataUrl, mediaType);
+    };
+    img.onerror = () => setPendingImage(reader.result, file.type || 'image/jpeg'); // fallback: raw
+    img.src = reader.result;
   };
   reader.readAsDataURL(file);
+}
+function setPendingImage(dataUrl, mediaType) {
+  pendingImage = { dataUrl, mediaType, base64: String(dataUrl).split(',')[1] };
+  const row = document.getElementById('attach-row');
+  if (row) row.innerHTML = `<div class="attach-chip"><img src="${dataUrl}" style="height:30px;width:30px;object-fit:cover;border-radius:6px"> photo ready — ask for a verdict <button class="x" onclick="clearPhoto()">✕</button></div>`;
 }
 function clearPhoto() { pendingImage = null; const row = document.getElementById('attach-row'); if (row) row.innerHTML = ''; }
 
